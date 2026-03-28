@@ -31,15 +31,6 @@ Project ウィンドウで PSD ファイルを右クリック → `Assets > PSD 
 | **レイヤーをPNGエクスポート + UIに展開** | PNG エクスポート後、Canvas 配下に Image として配置 |
 | **UIに展開 (サブスプライト方式)** | PSD のサブスプライトを直接参照して配置 (事前に Sprite Mode = Multiple が必要) |
 
-## 機能
-
-- **Built-in PSD Parser** — 外部ツール不要で PSD のレイヤー情報を読み取り
-- **PNG Layer Export** — 各レイヤーを個別 PNG ファイルとしてエクスポート
-- **Auto UI Placement** — レイヤーの元座標・サイズを忠実に再現して配置
-- **Sub-Sprite Mode** — Unity の PSD インポーターを直接利用するモード
-- **Unicode Layer Names** — 日本語レイヤー名を正しく取得
-- **Undo Support** — 生成した UI オブジェクトを Undo で元に戻せる
-
 ## ライセンス
 
 [The Unlicense](LICENSE)
