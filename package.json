@@ -1,0 +1,18 @@
+{
+  "name": "com.tsukumistudio.mornpsdconverter",
+  "version": "1.0.0",
+  "displayName": "MornPsdConverter",
+  "description": "PSD ファイルのレイヤーを Canvas 配下に UI Image として展開するエディタツール。",
+  "unity": "6000.0",
+  "license": "Unlicense",
+  "author": {
+    "name": "TsukumiStudio"
+  },
+  "keywords": [
+    "psd",
+    "photoshop",
+    "ui",
+    "converter",
+    "layout"
+  ]
+}
