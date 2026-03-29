@@ -8,6 +8,9 @@
   "author": {
     "name": "TsukumiStudio"
   },
+  "dependencies": {
+    "com.unity.2d.psdimporter": "9.0.0"
+  },
   "keywords": [
     "psd",
     "photoshop",
