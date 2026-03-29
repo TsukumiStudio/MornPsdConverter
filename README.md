@@ -21,6 +21,8 @@ Unity Package Manager で以下の Git URL を追加:
 https://github.com/TsukumiStudio/MornPsdConverter.git
 ```
 
+`Window > Package Manager > + > Add package from git URL...` に貼り付けてください。
+
 ### 依存パッケージ
 
 - [2D PSD Importer](https://docs.unity3d.com/Packages/com.unity.2d.psdimporter@latest) (`com.unity.2d.psdimporter`)
@@ -43,7 +45,7 @@ Project ウィンドウで PSD ファイルを右クリック → `Assets > PSD 
 | **UIに展開** | PSD のサブスプライトを直接参照して配置 |
 | **UIに展開 (階層あり)** | 上記 + PSD のフォルダ構造を GameObject 階層として再現 |
 
-### 注意事項
+## 注意事項
 
 - PSD Importer がスプライトを生成したレイヤーのみ配置されます
 - メニューは PSD Importer でインポートされた PSD ファイルを選択時のみ有効です
