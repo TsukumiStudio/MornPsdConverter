@@ -1,7 +1,9 @@
 {
     "name": "MornPsdConverter.Editor",
     "rootNamespace": "MornLib",
-    "references": [],
+    "references": [
+        "GUID:bcb706ca0f6dd48449aa27a93faa899c"
+    ],
     "includePlatforms": [
         "Editor"
     ],

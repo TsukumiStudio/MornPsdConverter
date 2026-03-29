@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using UnityEditor;
+using UnityEditor.U2D.PSD;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -15,6 +16,15 @@ namespace MornLib
     /// </summary>
     public static class MornPsdToUIConverter
     {
+        /// <summary>レイヤーのセクション種別。</summary>
+        private enum SectionType
+        {
+            Normal = 0,
+            GroupOpen = 1,
+            GroupClosed = 2,
+            GroupEnd = 3,
+        }
+
         private struct PsdLayerInfo
         {
             public string Name;
@@ -23,6 +33,7 @@ namespace MornLib
             public int Bottom;
             public int Right;
             public bool IsVisible;
+            public SectionType Section;
 
             public int Width => Right - Left;
             public int Height => Bottom - Top;
@@ -59,7 +70,7 @@ namespace MornLib
         }
 
         [MenuItem("Assets/PSD to UI/レイヤーをPNGエクスポート", true)]
-        private static bool ValidateExportLayersToPng() => IsSelectedPsd();
+        private static bool ValidateExportLayersToPng() => IsSelectedPsdWithMultipleSprite();
 
         [MenuItem("Assets/PSD to UI/レイヤーをPNGエクスポート + UIに展開")]
         private static void ExportAndBuildUI()
@@ -77,14 +88,53 @@ namespace MornLib
             var pngSprites = ExportSpritesToPngAndLoad(assetPath);
             if (pngSprites == null) return;
 
-            BuildUI(assetPath, header, layers, pngSprites);
+            BuildUI(assetPath, header, layers, pngSprites, false);
         }
 
         [MenuItem("Assets/PSD to UI/レイヤーをPNGエクスポート + UIに展開", true)]
-        private static bool ValidateExportAndBuildUI() => IsSelectedPsd();
+        private static bool ValidateExportAndBuildUI() => IsSelectedPsdWithMultipleSprite();
 
-        [MenuItem("Assets/PSD to UI/UIに展開 (サブスプライト方式)")]
+        [MenuItem("Assets/PSD to UI/レイヤーをPNGエクスポート + UIに展開 (階層あり)")]
+        private static void ExportAndBuildUIHierarchy()
+        {
+            var assetPath = GetSelectedPsdPath();
+            if (assetPath == null) return;
+
+            var fullPath = Path.GetFullPath(assetPath);
+            if (!TryParsePsd(fullPath, out var header, out var layers))
+            {
+                EditorUtility.DisplayDialog("PSD to UI", "PSD ファイルの解析に失敗しました。", "OK");
+                return;
+            }
+
+            var pngSprites = ExportSpritesToPngAndLoad(assetPath);
+            if (pngSprites == null) return;
+
+            BuildUI(assetPath, header, layers, pngSprites, true);
+        }
+
+        [MenuItem("Assets/PSD to UI/レイヤーをPNGエクスポート + UIに展開 (階層あり)", true)]
+        private static bool ValidateExportAndBuildUIHierarchy() => IsSelectedPsdWithMultipleSprite();
+
+        [MenuItem("Assets/PSD to UI/UIに展開")]
         private static void ConvertSelectedPsd()
+        {
+            ConvertSelectedPsdInternal(false);
+        }
+
+        [MenuItem("Assets/PSD to UI/UIに展開", true)]
+        private static bool ValidateConvertSelectedPsd() => IsSelectedPsdWithMultipleSprite();
+
+        [MenuItem("Assets/PSD to UI/UIに展開 (階層あり)")]
+        private static void ConvertSelectedPsdHierarchy()
+        {
+            ConvertSelectedPsdInternal(true);
+        }
+
+        [MenuItem("Assets/PSD to UI/UIに展開 (階層あり)", true)]
+        private static bool ValidateConvertSelectedPsdHierarchy() => IsSelectedPsdWithMultipleSprite();
+
+        private static void ConvertSelectedPsdInternal(bool keepHierarchy)
         {
             var assetPath = GetSelectedPsdPath();
             if (assetPath == null) return;
@@ -105,23 +155,21 @@ namespace MornLib
             var rootObj = CreateRootObject(assetPath, header, parent);
             var canvasW = (float)header.Width;
             var canvasH = (float)header.Height;
-            var count = 0;
 
-            foreach (var layer in layers)
+            int count;
+            if (keepHierarchy)
             {
-                if (layer.Width <= 0 || layer.Height <= 0) continue;
-                spriteByName.TryGetValue(layer.Name, out var sprite);
-                CreateLayerImage(rootObj.transform, layer, sprite, canvasW, canvasH);
-                count++;
+                count = BuildLayersHierarchy(rootObj.transform, layers, spriteByName, canvasW, canvasH);
+            }
+            else
+            {
+                count = BuildLayersFlat(rootObj.transform, layers, spriteByName, canvasW, canvasH);
             }
 
             Selection.activeGameObject = rootObj;
             Debug.Log(
                 $"[PSD to UI] {Path.GetFileNameWithoutExtension(assetPath)}: {count} レイヤーを展開 (PSD: {header.Width}x{header.Height})");
         }
-
-        [MenuItem("Assets/PSD to UI/UIに展開 (サブスプライト方式)", true)]
-        private static bool ValidateConvertSelectedPsd() => IsSelectedPsd();
 
         // ============================================================
         // PNG Export (Unity完結)
@@ -244,7 +292,7 @@ namespace MornLib
         // ============================================================
 
         private static void BuildUI(string assetPath, PsdHeader header, List<PsdLayerInfo> layers,
-            Dictionary<string, Sprite> spriteByName)
+            Dictionary<string, Sprite> spriteByName, bool keepHierarchy)
         {
             var parent = FindUIParent();
             if (parent == null) return;
@@ -252,19 +300,121 @@ namespace MornLib
             var rootObj = CreateRootObject(assetPath, header, parent);
             var canvasW = (float)header.Width;
             var canvasH = (float)header.Height;
-            var count = 0;
 
-            foreach (var layer in layers)
+            int count;
+            if (keepHierarchy)
             {
-                if (layer.Width <= 0 || layer.Height <= 0) continue;
-                spriteByName.TryGetValue(layer.Name, out var sprite);
-                CreateLayerImage(rootObj.transform, layer, sprite, canvasW, canvasH);
-                count++;
+                count = BuildLayersHierarchy(rootObj.transform, layers, spriteByName, canvasW, canvasH);
+            }
+            else
+            {
+                count = BuildLayersFlat(rootObj.transform, layers, spriteByName, canvasW, canvasH);
             }
 
             Selection.activeGameObject = rootObj;
             Debug.Log(
-                $"[PSD to UI] {Path.GetFileNameWithoutExtension(assetPath)}: {count} レイヤーをPNG参照でUI展開 (PSD: {header.Width}x{header.Height})");
+                $"[PSD to UI] {Path.GetFileNameWithoutExtension(assetPath)}: {count} レイヤーをUI展開 (PSD: {header.Width}x{header.Height})");
+        }
+
+        private static int BuildLayersFlat(Transform root, List<PsdLayerInfo> layers,
+            Dictionary<string, Sprite> spriteByName, float canvasW, float canvasH)
+        {
+            var count = 0;
+            foreach (var layer in layers)
+            {
+                if (layer.Section != SectionType.Normal) continue;
+                if (!spriteByName.TryGetValue(layer.Name, out var sprite)) continue;
+                CreateLayerImage(root, layer, sprite, canvasW, canvasH);
+                count++;
+            }
+
+            return count;
+        }
+
+        /// <summary>
+        /// PSDのグループ構造をGameObject階層として再現する。
+        /// PSDレイヤーはボトムアップ順で格納されている:
+        ///   GroupEnd(type3) → 子レイヤー → GroupOpen(type1/2, グループ名)
+        /// </summary>
+        private static int BuildLayersHierarchy(Transform root, List<PsdLayerInfo> layers,
+            Dictionary<string, Sprite> spriteByName, float canvasW, float canvasH)
+        {
+            var parentStack = new Stack<Transform>();
+            parentStack.Push(root);
+            var pendingGroups = new Stack<List<(PsdLayerInfo layer, Sprite sprite, Transform groupChild)>>();
+            var count = 0;
+
+            foreach (var layer in layers)
+            {
+                switch (layer.Section)
+                {
+                    case SectionType.GroupEnd:
+                        // グループ境界の終端マーカー → 新しいグループのコンテキストを開始
+                        pendingGroups.Push(new List<(PsdLayerInfo, Sprite, Transform)>());
+                        break;
+
+                    case SectionType.GroupOpen:
+                    case SectionType.GroupClosed:
+                        // グループヘッダー → グループGameObjectを作成し、溜めた子を配置
+                        var currentParent = parentStack.Peek();
+                        var groupObj = new GameObject(layer.Name, typeof(RectTransform));
+                        groupObj.transform.SetParent(currentParent, false);
+                        var groupRt = groupObj.GetComponent<RectTransform>();
+                        groupRt.anchorMin = Vector2.zero;
+                        groupRt.anchorMax = Vector2.one;
+                        groupRt.offsetMin = Vector2.zero;
+                        groupRt.offsetMax = Vector2.zero;
+                        groupObj.SetActive(layer.IsVisible);
+
+                        if (pendingGroups.Count > 0)
+                        {
+                            var children = pendingGroups.Pop();
+                            // PSDはボトムアップ順 = 追加順そのままでUnityのSibling順（後が手前）と一致
+                            for (var i = 0; i < children.Count; i++)
+                            {
+                                var (childLayer, childSprite, childGroup) = children[i];
+                                if (childGroup != null)
+                                {
+                                    // サブグループ: 既に作成済みのGameObjectを移動
+                                    childGroup.SetParent(groupObj.transform, false);
+                                }
+                                else
+                                {
+                                    CreateLayerImage(groupObj.transform, childLayer, childSprite, canvasW, canvasH);
+                                    count++;
+                                }
+                            }
+                        }
+
+                        // このグループ自体を親のpendingに登録
+                        if (pendingGroups.Count > 0)
+                        {
+                            pendingGroups.Peek().Add((layer, null, groupObj.transform));
+                        }
+
+                        break;
+
+                    default:
+                        // 通常レイヤー: スプライトが存在する場合のみ生成
+                        if (!spriteByName.TryGetValue(layer.Name, out var sprite)) break;
+
+                        if (pendingGroups.Count > 0)
+                        {
+                            // グループ内 → 後でまとめて配置するため溜める
+                            pendingGroups.Peek().Add((layer, sprite, null));
+                        }
+                        else
+                        {
+                            // トップレベル
+                            CreateLayerImage(root, layer, sprite, canvasW, canvasH);
+                            count++;
+                        }
+
+                        break;
+                }
+            }
+
+            return count;
         }
 
         // ============================================================
@@ -291,18 +441,29 @@ namespace MornLib
             var image = imgObj.GetComponent<Image>();
             image.sprite = sprite;
             image.raycastTarget = false;
+
+            var rt = imgObj.GetComponent<RectTransform>();
+            rt.anchorMin = new Vector2(0.5f, 0.5f);
+            rt.anchorMax = new Vector2(0.5f, 0.5f);
+
+            var w = layer.Width;
+            var h = layer.Height;
+            if ((w <= 0 || h <= 0) && sprite != null)
+            {
+                // 非表示レイヤーなどboundsが0の場合、スプライトサイズを使用
+                w = Mathf.RoundToInt(sprite.rect.width);
+                h = Mathf.RoundToInt(sprite.rect.height);
+            }
+
             if (sprite != null)
             {
                 image.SetNativeSize();
             }
 
-            var rt = imgObj.GetComponent<RectTransform>();
-            var centerX = layer.Left + layer.Width * 0.5f - canvasW * 0.5f;
-            var centerY = -(layer.Top + layer.Height * 0.5f - canvasH * 0.5f);
-            rt.anchorMin = new Vector2(0.5f, 0.5f);
-            rt.anchorMax = new Vector2(0.5f, 0.5f);
+            var centerX = layer.Left + w * 0.5f - canvasW * 0.5f;
+            var centerY = -(layer.Top + h * 0.5f - canvasH * 0.5f);
             rt.anchoredPosition = new Vector2(centerX, centerY);
-            rt.sizeDelta = new Vector2(layer.Width, layer.Height);
+            rt.sizeDelta = new Vector2(w, h);
             imgObj.SetActive(layer.IsVisible);
         }
 
@@ -311,6 +472,14 @@ namespace MornLib
             if (Selection.activeObject == null) return false;
             var path = AssetDatabase.GetAssetPath(Selection.activeObject);
             return !string.IsNullOrEmpty(path) && path.EndsWith(".psd", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool IsSelectedPsdWithMultipleSprite()
+        {
+            if (!IsSelectedPsd()) return false;
+            var path = AssetDatabase.GetAssetPath(Selection.activeObject);
+            var importer = AssetImporter.GetAtPath(path) as PSDImporter;
+            return importer != null;
         }
 
         private static string GetSelectedPsdPath()
@@ -412,6 +581,7 @@ namespace MornLib
                         Left = ReadInt32BE(reader),
                         Bottom = ReadInt32BE(reader),
                         Right = ReadInt32BE(reader),
+                        Section = SectionType.Normal,
                     };
 
                     var channelCount = ReadInt16BE(reader);
@@ -460,6 +630,15 @@ namespace MornLib
                             var unicodeLen = ReadInt32BE(reader);
                             var unicodeBytes = reader.ReadBytes(unicodeLen * 2);
                             info.Name = Encoding.BigEndianUnicode.GetString(unicodeBytes);
+                        }
+                        else if (key == "lsct" || key == "lsdk")
+                        {
+                            // レイヤーセクション区切り: 0=通常, 1=グループ(開), 2=グループ(閉), 3=境界マーカー
+                            var sectionType = ReadInt32BE(reader);
+                            if (sectionType >= 0 && sectionType <= 3)
+                            {
+                                info.Section = (SectionType)sectionType;
+                            }
                         }
 
                         stream.Position = dataEnd;
